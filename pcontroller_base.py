@@ -9,7 +9,11 @@ import threading
 class controller():
     def __init__(self):
         self.pose_subscriber = rospy.Subscriber('/ground_truth_to_tf/pose', PoseStamped, self.update_pose)
+        self.vel_publisher = rospy.Publisher('/cmd_vel', Twist,queue_size = 10 )
         # define a publisher that publishes Twist messages on the /cmd_vel topic
+        self.pose_const = 1
+        self.ang_const = 0.5
+
     def update_pose(self, data):
         #update current pose of the robot
         self.pose_stamped = data
@@ -43,14 +47,42 @@ class controller():
     def control_law(self):
         #p_controller
         #define a control law here, use the "self.goal" varibles and "self.pose_stamped" variables here
+		
+		# calculate the error for x and y 
+        dx = self.goal_x -self.pose_stamped.pose.position.x
+        dy = self.goal_y -self.pose_stamped.pose.position.y
+		
+		# calculate the error for the z axes and the angle 
+        dz = self.goal_z -self.pose_stamped.pose.position.z
+        dw = self.goal_angle -self.yaw
+		
+		# now we transform the error for x and y 
+		ux = (np.cos(self.yaw)*dx) + (np.sin(self.yaw)*dy)
+		uy = (-(np.sin(self.yaw)*dx)) + (np.cos(self.yaw)*dy)
+		
+		# apply the constant p factor: 
+		ux = self.pose_const*ux
+		uy = self.pose_const*uy
+		uz = self.pose_const*uz
+		uw = self.ang_const*uw
+
 
         #return the control values
         return ux,uy,uz,uw
+	print ux, uy
 
     def move2goal(self):
         while not rospy.is_shutdown():
             ux,uy,uz,uw = self.control_law()
-            #define a Twist message here, apply the values from the control lab and publish it to cnd_vel
+			#define a Twist message here, apply the values from the control lab and publish it to cmd_vel
+            twistMsg = Twist()
+            twistMsg.linear.x = ux
+            twistMsg.linear.y = uy
+            twistMsg.linear.z = uz 
+            twistMsg.angular.z = uw
+            self.vel_publisher.publish(twistMsg)
+        rospy.spin()
+            
 
 
 
